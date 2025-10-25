@@ -173,7 +173,7 @@ export function QuizClient() {
         feedback: new Array(currentQuiz.length).fill(null),
         isCorrect: isCorrectArray,
     });
-    const savedAttempt = quizAttempts?.find(a => a.id === attemptId);
+    const savedAttempt = store.quizAttempts?.find(a => a.id === attemptId);
     setLatestAttempt(savedAttempt || null);
     setStage('results');
     setIsSubmitting(false);
