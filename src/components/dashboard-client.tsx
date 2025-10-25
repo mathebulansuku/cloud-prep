@@ -1,0 +1,166 @@
+'use client';
+
+import React from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { useAppStore } from '@/lib/store';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartConfig,
+} from '@/components/ui/chart';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { ArrowRight, BookCopy, FileQuestion, Layers3 } from 'lucide-react';
+
+const chartConfig = {
+  score: {
+    label: 'Score',
+    color: 'hsl(var(--primary))',
+  },
+} satisfies ChartConfig;
+
+export function DashboardClient() {
+  const { studySets, quizAttempts, generatedFlashcards } = useAppStore(state => ({
+    studySets: state.studySets,
+    quizAttempts: state.quizAttempts,
+    generatedFlashcards: state.generatedFlashcards,
+  }));
+
+  const welcomeImage = PlaceHolderImages.find(img => img.id === 'dashboard-welcome');
+  const totalFlashcards = Object.values(generatedFlashcards).flat().length;
+
+  const chartData = (quizAttempts ?? []).slice(-10).map(attempt => ({
+    date: new Date(attempt.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    score: attempt.score,
+  }));
+
+  const averageScore = quizAttempts && quizAttempts.length > 0
+    ? Math.round(quizAttempts.reduce((acc, curr) => acc + curr.score, 0) / quizAttempts.length)
+    : 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="relative w-full h-64 md:h-80 rounded-xl overflow-hidden shadow-lg">
+        {welcomeImage && (
+          <Image
+            src={welcomeImage.imageUrl}
+            alt={welcomeImage.description}
+            fill
+            className="object-cover"
+            priority
+            data-ai-hint={welcomeImage.imageHint}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        <div className="absolute bottom-0 left-0 p-6 md:p-8">
+          <h1 className="text-3xl md:text-4xl font-headline font-bold text-white">Welcome to CertAI Prep</h1>
+          <p className="mt-2 text-lg text-white/90 max-w-2xl">
+            Your intelligent partner for cloud certification success. Upload study materials, generate quizzes, and master concepts with AI-powered flashcards.
+          </p>
+          <Button asChild className="mt-4" size="lg">
+            <Link href="/study-sets">
+              Get Started <ArrowRight className="ml-2" />
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Study Sets</CardTitle>
+            <BookCopy className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{studySets?.length || 0}</div>
+            <p className="text-xs text-muted-foreground">materials uploaded</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Quizzes Taken</CardTitle>
+            <FileQuestion className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{quizAttempts?.length || 0}</div>
+            <p className="text-xs text-muted-foreground">total attempts</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Average Score</CardTitle>
+            <div className="h-4 w-4 text-accent">{averageScore}%</div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{averageScore}%</div>
+            <p className="text-xs text-muted-foreground">across all quizzes</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Flashcards Created</CardTitle>
+            <Layers3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalFlashcards}</div>
+            <p className="text-xs text-muted-foreground">ready for review</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Performance</CardTitle>
+          <CardDescription>Your scores on the last 10 quizzes.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {quizAttempts && quizAttempts.length > 0 ? (
+            <div className="h-[300px]">
+              <ChartContainer config={chartConfig} className="h-full w-full">
+                <BarChart data={chartData} accessibilityLayer>
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickLine={false}
+                    tickMargin={10}
+                    axisLine={false}
+                    tickFormatter={(value) => value}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={10}
+                    unit="%"
+                  />
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent indicator="dot" />}
+                  />
+                  <Bar dataKey="score" fill="var(--color-score)" radius={4} />
+                </BarChart>
+              </ChartContainer>
+            </div>
+          ) : (
+            <div className="flex h-[300px] flex-col items-center justify-center text-center">
+              <h3 className="text-lg font-semibold">No Quiz Data Yet</h3>
+              <p className="text-muted-foreground">Take a quiz to see your performance here.</p>
+              <Button asChild variant="secondary" className="mt-4">
+                <Link href="/quiz">Create a Quiz</Link>
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
