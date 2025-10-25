@@ -96,7 +96,7 @@ export function QuizClient() {
     );
   }
 
-  const { studySets, addQuiz, addQuizAttempt: saveAttempt, updateFeedback, quizzes, quizAttempts } = store;
+  const { studySets, addQuiz, addQuizAttempt: saveAttempt, updateFeedback } = store;
 
   const setupForm = useForm<SetupFormValues>({
     resolver: zodResolver(setupSchema),
@@ -114,6 +114,11 @@ export function QuizClient() {
     if (state.message && state.quiz) {
       toast({ title: 'Success', description: state.message });
       const selectedSet = studySets?.find(s => s.id === setupForm.getValues('studySetId'));
+      if (!selectedSet) {
+        toast({ title: 'Error', description: 'Could not find the study set.', variant: 'destructive'});
+        setIsGenerating(false);
+        return;
+      }
       const quizId = addQuiz({
         studySetId: selectedSet!.id,
         studySetTitle: selectedSet!.title,
