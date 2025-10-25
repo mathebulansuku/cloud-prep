@@ -1,3 +1,4 @@
+import React from 'react';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { StudySet, Quiz, Flashcard, QuizAttempt } from '@/lib/types';

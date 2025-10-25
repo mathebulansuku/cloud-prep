@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/chart';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { ArrowRight, BookCopy, FileQuestion, Layers3 } from 'lucide-react';
+import { Skeleton } from './ui/skeleton';
 
 const chartConfig = {
   score: {
@@ -30,13 +31,31 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export function DashboardClient() {
-  const { studySets, quizAttempts, generatedFlashcards } = useAppStore(state => ({
+  const store = useAppStore(state => ({
     studySets: state.studySets,
     quizAttempts: state.quizAttempts,
     generatedFlashcards: state.generatedFlashcards,
   }));
 
   const welcomeImage = PlaceHolderImages.find(img => img.id === 'dashboard-welcome');
+  
+  if (!store) {
+    return (
+        <div className="space-y-6">
+            <Skeleton className="h-80 w-full rounded-xl" />
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Skeleton className="h-28 w-full" />
+                <Skeleton className="h-28 w-full" />
+                <Skeleton className="h-28 w-full" />
+                <Skeleton className="h-28 w-full" />
+            </div>
+            <Skeleton className="h-[400px] w-full" />
+        </div>
+    );
+  }
+
+  const { studySets, quizAttempts, generatedFlashcards } = store;
+
   const totalFlashcards = Object.values(generatedFlashcards).flat().length;
 
   const chartData = (quizAttempts ?? []).slice(-10).map(attempt => ({
