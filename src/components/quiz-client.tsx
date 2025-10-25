@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFormState } from 'react-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAppStore } from '@/lib/store';
@@ -51,7 +51,7 @@ type SetupFormValues = z.infer<typeof setupSchema>;
 type QuizStage = 'setup' | 'taking' | 'results';
 
 export function QuizClient() {
-  const { studySets, addQuiz, addQuizAttempt: saveAttempt, updateFeedback, quizzes, quizAttempts } = useAppStore(state => state);
+  const store = useAppStore(state => state);
   const { toast } = useToast();
 
   const [stage, setStage] = useState<QuizStage>('setup');
@@ -63,6 +63,40 @@ export function QuizClient() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackLoading, setFeedbackLoading] = useState<number | null>(null);
+
+  if (!store) {
+    return (
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-64" />
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </div>
+          <Skeleton className="h-10 w-36" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const { studySets, addQuiz, addQuizAttempt: saveAttempt, updateFeedback, quizzes, quizAttempts } = store;
 
   const setupForm = useForm<SetupFormValues>({
     resolver: zodResolver(setupSchema),
@@ -95,7 +129,7 @@ export function QuizClient() {
       toast({ title: 'Error', description: state.error, variant: 'destructive' });
       setIsGenerating(false);
     }
-  }, [state]);
+  }, [state, addQuiz, setupForm, studySets, toast]);
 
   const handleSetupSubmit = (data: SetupFormValues) => {
     setIsGenerating(true);
@@ -182,47 +216,35 @@ export function QuizClient() {
         </CardHeader>
         <CardContent className="space-y-4">
           {currentQ.type === 'multiple choice' && (
-             <Controller
-              name={`question-${currentQuestionIndex}`}
-              control={{} as any}
-              render={({ field }) => (
-                <RadioGroup
-                  onValueChange={(value) => handleAnswerChange(value)}
-                  value={userAnswers[currentQuestionIndex] as string}
-                >
-                  {currentQ.answers.map((answer, i) => (
-                    <FormItem key={i} className="flex items-center space-x-3 space-y-0 rounded-md border p-4 hover:bg-accent/50 transition-colors">
-                       <FormControl>
-                        <RadioGroupItem value={answer} />
-                      </FormControl>
-                      <FormLabel className="font-normal flex-1 cursor-pointer">{answer}</FormLabel>
-                    </FormItem>
-                  ))}
-                </RadioGroup>
-              )}
-            />
+            <RadioGroup
+              onValueChange={(value) => handleAnswerChange(value)}
+              value={userAnswers[currentQuestionIndex] as string}
+            >
+              {currentQ.answers.map((answer, i) => (
+                <FormItem key={i} className="flex items-center space-x-3 space-y-0 rounded-md border p-4 hover:bg-accent/50 transition-colors">
+                   <FormControl>
+                    <RadioGroupItem value={answer} />
+                  </FormControl>
+                  <FormLabel className="font-normal flex-1 cursor-pointer">{answer}</FormLabel>
+                </FormItem>
+              ))}
+            </RadioGroup>
           )}
            {currentQ.type === 'true/false' && (
-             <Controller
-              name={`question-${currentQuestionIndex}`}
-              control={{} as any}
-              render={({ field }) => (
-                <RadioGroup
-                  onValueChange={(value) => handleAnswerChange(value)}
-                  value={userAnswers[currentQuestionIndex] as string}
-                  className="space-y-2"
-                >
-                  {currentQ.answers.map((answer, i) => (
-                     <FormItem key={i} className="flex items-center space-x-3 space-y-0 rounded-md border p-4 hover:bg-accent/50 transition-colors">
-                      <FormControl>
-                        <RadioGroupItem value={answer} />
-                      </FormControl>
-                      <FormLabel className="font-normal flex-1 cursor-pointer">{answer}</FormLabel>
-                    </FormItem>
-                  ))}
-                </RadioGroup>
-              )}
-            />
+             <RadioGroup
+              onValueChange={(value) => handleAnswerChange(value)}
+              value={userAnswers[currentQuestionIndex] as string}
+              className="space-y-2"
+            >
+              {currentQ.answers.map((answer, i) => (
+                 <FormItem key={i} className="flex items-center space-x-3 space-y-0 rounded-md border p-4 hover:bg-accent/50 transition-colors">
+                  <FormControl>
+                    <RadioGroupItem value={answer} />
+                  </FormControl>
+                  <FormLabel className="font-normal flex-1 cursor-pointer">{answer}</FormLabel>
+                </FormItem>
+              ))}
+            </RadioGroup>
           )}
            {currentQ.type === 'short answer' && (
               <Input 
@@ -397,7 +419,7 @@ export function QuizClient() {
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a difficulty..." />
-                        </SelectTrigger>
+                        </Trigger>
                       </FormControl>
                       <SelectContent>
                         {difficultyLevels.map(level => <SelectItem key={level} value={level} className="capitalize">{level}</SelectItem>)}
