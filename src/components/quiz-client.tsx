@@ -63,7 +63,47 @@ export function QuizClient() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackLoading, setFeedbackLoading] = useState<number | null>(null);
+  
+  const setupForm = useForm<SetupFormValues>({
+    resolver: zodResolver(setupSchema),
+    defaultValues: {
+      studySetId: '',
+      numberOfQuestions: 5,
+      questionTypes: ['multiple choice'],
+      difficultyLevel: 'medium',
+    },
+  });
 
+  const [state, formAction] = useFormState(createQuizAction, { message: '' });
+
+  useEffect(() => {
+    if (!store) return;
+    const { studySets, addQuiz } = store;
+    if (state.message && state.quiz) {
+      toast({ title: 'Success', description: state.message });
+      const selectedSet = studySets?.find(s => s.id === setupForm.getValues('studySetId'));
+      if (!selectedSet) {
+        toast({ title: 'Error', description: 'Could not find the study set.', variant: 'destructive'});
+        setIsGenerating(false);
+        return;
+      }
+      const quizId = addQuiz({
+        studySetId: selectedSet!.id,
+        studySetTitle: selectedSet!.title,
+        questions: state.quiz,
+      });
+      setCurrentQuizId(quizId);
+      setCurrentQuiz(state.quiz);
+      setUserAnswers(new Array(state.quiz.length).fill(''));
+      setStage('taking');
+      setIsGenerating(false);
+    }
+    if (state.error) {
+      toast({ title: 'Error', description: state.error, variant: 'destructive' });
+      setIsGenerating(false);
+    }
+  }, [state, store, setupForm, toast]);
+  
   if (!store) {
     return (
       <Card>
@@ -97,44 +137,6 @@ export function QuizClient() {
   }
 
   const { studySets, addQuiz, addQuizAttempt: saveAttempt, updateFeedback } = store;
-
-  const setupForm = useForm<SetupFormValues>({
-    resolver: zodResolver(setupSchema),
-    defaultValues: {
-      studySetId: '',
-      numberOfQuestions: 5,
-      questionTypes: ['multiple choice'],
-      difficultyLevel: 'medium',
-    },
-  });
-
-  const [state, formAction] = useFormState(createQuizAction, { message: '' });
-
-  useEffect(() => {
-    if (state.message && state.quiz) {
-      toast({ title: 'Success', description: state.message });
-      const selectedSet = studySets?.find(s => s.id === setupForm.getValues('studySetId'));
-      if (!selectedSet) {
-        toast({ title: 'Error', description: 'Could not find the study set.', variant: 'destructive'});
-        setIsGenerating(false);
-        return;
-      }
-      const quizId = addQuiz({
-        studySetId: selectedSet!.id,
-        studySetTitle: selectedSet!.title,
-        questions: state.quiz,
-      });
-      setCurrentQuizId(quizId);
-      setCurrentQuiz(state.quiz);
-      setUserAnswers(new Array(state.quiz.length).fill(''));
-      setStage('taking');
-      setIsGenerating(false);
-    }
-    if (state.error) {
-      toast({ title: 'Error', description: state.error, variant: 'destructive' });
-      setIsGenerating(false);
-    }
-  }, [state, addQuiz, setupForm, studySets, toast]);
 
   const handleSetupSubmit = (data: SetupFormValues) => {
     setIsGenerating(true);
