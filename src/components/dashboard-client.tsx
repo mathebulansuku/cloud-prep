@@ -35,6 +35,7 @@ export function DashboardClient() {
     studySets: state.studySets,
     quizAttempts: state.quizAttempts,
     generatedFlashcards: state.generatedFlashcards,
+    srs: state.srs,
   }));
 
   const welcomeImage = PlaceHolderImages.find(img => img.id === 'dashboard-welcome');
@@ -54,9 +55,15 @@ export function DashboardClient() {
     );
   }
 
-  const { studySets, quizAttempts, generatedFlashcards } = store;
+  const { studySets, quizAttempts, generatedFlashcards, srs } = store;
 
   const totalFlashcards = Object.values(generatedFlashcards).flat().length;
+  const now = Date.now();
+  const dueToday = Object.entries(generatedFlashcards).reduce((acc, [setId, cards]) => {
+    const setSrs = srs?.[setId] || {};
+    const due = (cards as any[]).filter((c: any) => (setSrs[c.id]?.dueAt || Infinity) <= now).length;
+    return acc + due;
+  }, 0);
 
   const chartData = (quizAttempts ?? []).slice(-10).map(attempt => ({
     date: new Date(attempt.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -69,6 +76,25 @@ export function DashboardClient() {
 
   return (
     <div className="space-y-6">
+      {(!studySets?.length && !quizAttempts?.length && totalFlashcards === 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Welcome! Let’s get you started</CardTitle>
+            <CardDescription>Follow these quick steps to set up your study workspace.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ol className="list-decimal pl-5 space-y-2 text-sm text-muted-foreground">
+              <li>Add a study set with your notes and optional tags.</li>
+              <li>Generate a quiz to check your understanding.</li>
+              <li>Create flashcards and review due cards with SRS.</li>
+            </ol>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button asChild size="sm"><Link href="/study-sets">Add Study Set</Link></Button>
+              <Button asChild size="sm" variant="secondary"><Link href="/quiz">Create a Quiz</Link></Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <div className="relative w-full h-64 md:h-80 rounded-xl overflow-hidden shadow-lg">
         {welcomeImage && (
           <Image
@@ -103,6 +129,16 @@ export function DashboardClient() {
           <CardContent>
             <div className="text-2xl font-bold">{studySets?.length || 0}</div>
             <p className="text-xs text-muted-foreground">materials uploaded</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Due Today</CardTitle>
+            <Layers3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dueToday}</div>
+            <p className="text-xs text-muted-foreground">flashcards to review</p>
           </CardContent>
         </Card>
         <Card>

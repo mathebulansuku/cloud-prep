@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useFormState } from 'react-dom';
+import { useActionState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -44,6 +44,7 @@ const setupSchema = z.object({
     message: 'You have to select at least one question type.',
   }),
   difficultyLevel: z.string().min(1, 'Please select a difficulty level.'),
+  mode: z.enum(['practice','exam','review']).default('practice'),
 });
 
 type SetupFormValues = z.infer<typeof setupSchema>;
@@ -71,10 +72,15 @@ export function QuizClient() {
       numberOfQuestions: 5,
       questionTypes: ['multiple choice'],
       difficultyLevel: 'medium',
+      mode: 'practice',
     },
   });
 
-  const [state, formAction] = useFormState(createQuizAction, { message: '' });
+  const [state, formAction] = useActionState(createQuizAction, { message: '' });
+
+  // Prevent hydration mismatches by deferring full render until mounted
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!store) return;
@@ -91,6 +97,7 @@ export function QuizClient() {
         studySetId: selectedSet!.id,
         studySetTitle: selectedSet!.title,
         questions: state.quiz,
+        mode: setupForm.getValues('mode'),
       });
       setCurrentQuizId(quizId);
       setCurrentQuiz(state.quiz);
@@ -104,7 +111,7 @@ export function QuizClient() {
     }
   }, [state, store, setupForm, toast]);
   
-  if (!store) {
+  if (!mounted || !store) {
     return (
       <Card>
         <CardHeader>
@@ -146,12 +153,44 @@ export function QuizClient() {
       setIsGenerating(false);
       return;
     }
+    if (data.mode === 'review') {
+      // Use the latest attempt for the selected set and focus on incorrect items
+      const relatedQuizzes = store.quizzes?.filter(q => q.studySetId === selectedSet.id) || [];
+      const latestQuiz = relatedQuizzes[relatedQuizzes.length - 1];
+      if (!latestQuiz) {
+        toast({ title: 'No History', description: 'No quiz history found for this study set.', variant: 'destructive' });
+        setIsGenerating(false);
+        return;
+      }
+      const attemptsForQuiz = (store.quizAttempts || []).filter(a => a.quizId === latestQuiz.id).sort((a,b) => a.submittedAt - b.submittedAt);
+      const latest = attemptsForQuiz[attemptsForQuiz.length - 1];
+      if (!latest) {
+        toast({ title: 'No Attempts', description: 'No attempts found to build a review from.', variant: 'destructive' });
+        setIsGenerating(false);
+        return;
+      }
+      const incorrectIdx = latest.isCorrect.map((v,i) => ({v,i})).filter(x => !x.v).map(x => x.i);
+      const questions = incorrectIdx.map(idx => latestQuiz.questions[idx]).filter(Boolean);
+      if (questions.length === 0) {
+        toast({ title: 'All Correct', description: 'No incorrect questions to review. Great job!' });
+        setIsGenerating(false);
+        return;
+      }
+      setCurrentQuizId(latestQuiz.id);
+      setCurrentQuiz(questions);
+      setUserAnswers(new Array(questions.length).fill(''));
+      setStage('taking');
+      setIsGenerating(false);
+      return;
+    }
     const formData = new FormData();
     formData.append('studyMaterial', selectedSet.content);
     formData.append('numberOfQuestions', data.numberOfQuestions.toString());
     data.questionTypes.forEach(qt => formData.append('questionTypes', qt));
     formData.append('difficultyLevel', data.difficultyLevel);
-    formAction(formData);
+    React.startTransition(() => {
+      formAction(formData);
+    });
   };
 
   const handleAnswerChange = (answer: string | string[]) => {
@@ -426,10 +465,32 @@ export function QuizClient() {
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a difficulty..." />
-                        </Trigger>
+                        </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {difficultyLevels.map(level => <SelectItem key={level} value={level} className="capitalize">{level}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={setupForm.control}
+                name="mode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mode</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isGenerating}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a mode..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="practice">Practice (feedback allowed)</SelectItem>
+                        <SelectItem value="exam">Exam (no hints)</SelectItem>
+                        <SelectItem value="review">Review (mistakes only)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

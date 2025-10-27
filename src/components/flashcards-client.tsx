@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import { useFormState } from 'react-dom';
+import React, { useEffect, useState, useActionState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -16,15 +15,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -53,9 +45,12 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export function FlashcardsClient() {
-  const { studySets, addFlashcards } = useAppStore(state => ({
+  const { studySets, addFlashcards, generatedFlashcards: generatedFlashcardsMap, srs, reviewFlashcard } = useAppStore(state => ({
     studySets: state.studySets,
     addFlashcards: state.addFlashcards,
+    generatedFlashcards: state.generatedFlashcards,
+    srs: state.srs,
+    reviewFlashcard: state.reviewFlashcard,
   }));
   const { toast } = useToast();
   const [generatedFlashcards, setGeneratedFlashcards] = React.useState<Flashcard[]>([]);
@@ -69,9 +64,18 @@ export function FlashcardsClient() {
     },
   });
 
-  const [state, formAction] = useFormState(createFlashcardsAction, {
+  // SRS review state
+  const [reviewSetId, setReviewSetId] = React.useState<string>('');
+  const [reviewIndex, setReviewIndex] = React.useState(0);
+  const [showAnswer, setShowAnswer] = React.useState(false);
+
+  const [state, formAction] = useActionState(createFlashcardsAction, {
     message: '',
   });
+
+  // Avoid hydration mismatch by rendering skeleton until mounted
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   React.useEffect(() => {
     if (state.message && state.flashcards) {
@@ -99,7 +103,9 @@ export function FlashcardsClient() {
     formData.append('studyMaterials', selectedSet.content);
     formData.append('numberOfFlashcards', data.numberOfFlashcards.toString());
 
-    formAction(formData);
+    React.startTransition(() => {
+      formAction(formData);
+    });
   };
 
   const exportToCSV = () => {
@@ -115,6 +121,47 @@ export function FlashcardsClient() {
     document.body.removeChild(link);
     toast({ title: 'Exported', description: 'Flashcards have been exported to CSV.' });
   }
+
+  // Build due queue for selected review set (declare before any early returns to keep hooks order stable)
+  const now = Date.now();
+  const dueQueue = React.useMemo(() => {
+    if (!reviewSetId) return [] as { id: string; question: string; answer: string }[];
+    const cards = (generatedFlashcardsMap[reviewSetId] || []) as any[];
+    const srsForSet = srs[reviewSetId] || {};
+    return cards.filter(c => (srsForSet[c.id]?.dueAt || 0) <= now).map(c => ({ id: c.id as string, question: c.question, answer: c.answer }));
+  }, [generatedFlashcardsMap, reviewSetId, srs, now]);
+
+  if (!mounted) {
+    return (
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-64" />
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </div>
+          <Skeleton className="h-10 w-36" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const handleReview = (rating: 'again'|'good'|'easy') => {
+    const current = dueQueue[reviewIndex];
+    if (!current) return;
+    reviewFlashcard(reviewSetId, current.id, rating);
+    setShowAnswer(false);
+    setReviewIndex(i => i + 1);
+  };
 
   return (
     <div className="space-y-8">
@@ -186,6 +233,65 @@ export function FlashcardsClient() {
               </Button>
             </form>
           </Form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Spaced Repetition</CardTitle>
+          <CardDescription>Review cards that are due today.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-6 items-end">
+            <div>
+              <Label>Select Study Set</Label>
+              <Select value={reviewSetId} onValueChange={setReviewSetId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a set..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {studySets?.map(set => (
+                    <SelectItem key={set.id} value={set.id}>{set.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Due today: <span className="font-semibold text-foreground">{dueQueue.length}</span>
+            </div>
+          </div>
+
+          {reviewSetId && dueQueue.length > 0 && (
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Card {Math.min(reviewIndex + 1, dueQueue.length)} / {dueQueue.length}</CardTitle>
+                  <CardDescription>Tap reveal to see the answer.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-lg font-medium">{dueQueue[reviewIndex]?.question}</p>
+                  {showAnswer && (
+                    <p className="text-muted-foreground">{dueQueue[reviewIndex]?.answer}</p>
+                  )}
+                  <div className="flex gap-2">
+                    {!showAnswer ? (
+                      <Button variant="secondary" onClick={() => setShowAnswer(true)}>Reveal</Button>
+                    ) : (
+                      <>
+                        <Button variant="destructive" onClick={() => handleReview('again')}>Again</Button>
+                        <Button variant="outline" onClick={() => handleReview('good')}>Good</Button>
+                        <Button onClick={() => handleReview('easy')}>Easy</Button>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {reviewSetId && dueQueue.length === 0 && (
+            <p className="text-sm text-muted-foreground">No cards due right now. Come back later!</p>
+          )}
         </CardContent>
       </Card>
 
