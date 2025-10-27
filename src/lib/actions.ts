@@ -14,6 +14,7 @@ import {
 } from '@/ai/flows/provide-adaptive-feedback';
 import { z } from 'zod';
 import type { QuizQuestion, Flashcard } from './types';
+import { designFeature, DesignFeatureInput } from '@/ai/flows/design-feature';
 
 const quizInputSchema = z.object({
   studyMaterial: z.string().min(500, "Please provide at least 500 words of study material."),
@@ -100,5 +101,27 @@ export async function getFeedbackAction(
   } catch (e) {
     console.error(e);
     return { error: 'Failed to get AI feedback. Please try again.' };
+  }
+}
+
+export async function designFeatureAction(
+  prev: any,
+  formData: FormData
+): Promise<{ formatted?: string; error?: string }> {
+  try {
+    const input: DesignFeatureInput = {
+      featureName: String(formData.get('featureName') || ''),
+      targetCloud: (String(formData.get('targetCloud') || 'multi') as any),
+      targetCertification: formData.get('targetCertification') ? String(formData.get('targetCertification')) : undefined,
+      learnerContext: formData.get('learnerContext') ? String(formData.get('learnerContext')) : undefined,
+    };
+    if (!input.featureName) {
+      return { error: 'Please provide a feature name.' };
+    }
+    const result = await designFeature(input);
+    return { formatted: result.formatted };
+  } catch (e) {
+    console.error(e);
+    return { error: 'Failed to design the feature. Please try again.' };
   }
 }
