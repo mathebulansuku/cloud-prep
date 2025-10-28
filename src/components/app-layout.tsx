@@ -87,8 +87,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </SidebarMenu>
                 </SidebarContent>
                 <SidebarFooter>
-                    <div className="px-3 py-2 text-xs text-muted-foreground">
-                        {email ? <span>Signed in as <span className="text-foreground font-medium">{email}</span></span> : <span>Not signed in</span>}
+                    <div className="px-3 py-2 text-xs text-[hsl(var(--sidebar-foreground))]">
+                        {email ? <span>Signed in as <span className="font-medium">{email}</span></span> : <span>Not signed in</span>}
                     </div>
                     <div className="px-3 pb-3">
                         <Button variant="default" className="w-full" onClick={handleSignOut}>Sign out</Button>
